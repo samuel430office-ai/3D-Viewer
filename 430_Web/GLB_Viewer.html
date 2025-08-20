@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js GLB Viewer</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #color-buttons {
+            position: absolute;
+            bottom: 150px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 15px;
+        }
+        #color-buttons button {
+            width: 50px;
+            height: 50px;
+            border: 3px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+    <div id="color-buttons">
+        <button style="background-color: red" data-color="0xff0000"></button>
+        <button style="background-color: green" data-color="0x00ff00"></button>
+        <button style="background-color: blue" data-color="0x0000ff"></button>
+        <button style="background-color: yellow" data-color="0xffff00"></button>
+        <button style="background-color: white" data-color="0xffffff"></button>
+    </div>
+    <script>
+        // Set up scene, camera, and renderer
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 5);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Add orbit controls for interactivity
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+        controls.enableZoom = false;
+        controls.enablePan = false;
+        
+        // Add lighting for high render quality
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+        
+        let mixer;
+        const clock = new THREE.Clock();
+        let model;
+
+        // Load the GLB model
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+            './Model/YOHO_C01_Rig_A_v05.glb',  // Replace with your GLB file URL
+            function (gltf) {
+                model = gltf.scene;
+                
+                // Optional: Center and scale the model
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                model.position.set(-center.x, -center.y, -center.z);
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const scale = 4 / maxDim;  // Adjust scale as needed
+                model.scale.set(scale, scale, scale);
+                
+                scene.add(model);
+
+                if (gltf.animations && gltf.animations.length) {
+                    mixer = new THREE.AnimationMixer(model);
+                    gltf.animations.forEach((clip) => {
+                        mixer.clipAction(clip).play();
+                    });
+                }
+            },
+            undefined,  // Progress callback (optional)
+            function (error) {
+                console.error('Error loading GLB:', error);
+            }
+        );
+
+        function changeModelColor(color) {
+            if (model) {
+                const materialsToColor = [];
+                model.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            materialsToColor.push(...child.material);
+                        } else {
+                            materialsToColor.push(child.material);
+                        }
+                    }
+                });
+
+                const uniqueMaterials = [...new Set(materialsToColor)];
+
+                if (uniqueMaterials.length > 0) {
+                    uniqueMaterials[0].color.set(color);
+                }
+                if (uniqueMaterials.length > 4) {
+                    uniqueMaterials[4].color.set(color);
+                }
+            }
+        }
+
+        document.getElementById('color-buttons').addEventListener('click', (event) => {
+            if (event.target.tagName === 'BUTTON') {
+                const color = parseInt(event.target.dataset.color, 16);
+                changeModelColor(color);
+            }
+        });
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if(mixer) mixer.update(clock.getDelta());
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
